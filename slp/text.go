@@ -1,13 +1,14 @@
 package slp
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 )
 
-// https://wiki.vg/Chat
-type Chat struct {
-	Text  string `json:"text,omitempty"`
-	Extra []Chat `json:"extra,omitempty"`
+type TextComponent struct {
+	Text  string          `json:"text,omitempty"`
+	Extra []TextComponent `json:"extra,omitempty"`
 
 	// Shared between all components
 	Bold          *bool  `json:"bold,omitempty"`
@@ -17,6 +18,29 @@ type Chat struct {
 	Obfuscated    *bool  `json:"obfuscated,omitempty"`
 	Font          string `json:"font,omitempty"`
 	Color         string `json:"color,omitempty"`
+}
+
+func (c *TextComponent) UnmarshalJSON(data []byte) error {
+	var text interface{}
+	err := json.Unmarshal(data, &text)
+	if err != nil {
+		return err
+	}
+
+	item := reflect.ValueOf(text)
+	switch item.Kind() {
+	case reflect.String:
+		c.Text = item.String()
+	case reflect.Map:
+		type Alias TextComponent
+		aux := (*Alias)(c)
+		err = json.Unmarshal(data, &aux)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func ColorToUnicode(color string) string {
@@ -60,7 +84,7 @@ func ColorToUnicode(color string) string {
 	}
 }
 
-func (c Chat) buildString(parent Chat) string {
+func (c TextComponent) buildString(parent TextComponent) string {
 	str := strings.Builder{}
 
 	if c.Text != "" {
@@ -131,6 +155,22 @@ func (c Chat) buildString(parent Chat) string {
 
 }
 
-func (c Chat) String() string {
-	return c.buildString(Chat{})
+func (c TextComponent) String() string {
+	return c.buildString(TextComponent{})
+}
+
+func (c TextComponent) PrettyString(depth int) string {
+	str := strings.Builder{}
+
+	if c.Text != "" {
+		str.WriteString(strings.Repeat("  ", depth))
+		str.WriteString(c.Text)
+		str.WriteString("\n")
+	}
+
+	for _, extra := range c.Extra {
+		str.WriteString(extra.PrettyString(depth + 1))
+	}
+
+	return str.String()
 }
